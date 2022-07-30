@@ -176,6 +176,15 @@ jobs:
         - image: amazon/aws-cli
       steps:
         - run:
+            name: install dependencies
+            command: |
+              yum install -y tar gzip make
+        - run:
+            name: install kubectl
+            command: |
+              make install-kubectl
+              make update-kubeconfig
+        - run:
             name: backend smoke test
             command: |
               export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
@@ -208,7 +217,7 @@ jobs:
             name: test sed command
             command: |
               sed -e 's/latest/${CIRCLE_WORKFLOW_ID:0:7}/g' -i .circleci/files/deployment.yml
-              cat circleci/files/deployment.yml
+              cat .circleci/files/deployment.yml
 
 workflows:
   default:
