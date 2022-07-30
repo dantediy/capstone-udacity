@@ -139,24 +139,30 @@ jobs:
             name: run pod
             command: |
               kubectl run project --image=943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
+        - run: sleep 180;
+        - run:
+            name: run pod and port-forward
+            command: |
               kubectl get pod
+              kubectl port-forward project --address 0.0.0.0 3030:3030
+              
 workflows:
   default:
     jobs:
-      - test_frontend
-      - test_backend
-      - scan_frontend
-      - scan_backend
-      # - deploy_infrastructure:
+      # - test_frontend
+      # - test_backend
+      # - scan_frontend
+      # - scan_backend
+      # # - deploy_infrastructure:
+      # #     requires: [test_frontend, test_backend, scan_frontend, scan_backend]
+      # #     filters:
+      # #       branches:
+      # #         only: [main]
+      # - build_frontend:
+      #     # requires: [deploy_infrastructure]
       #     requires: [test_frontend, test_backend, scan_frontend, scan_backend]
-      #     filters:
-      #       branches:
-      #         only: [main]
-      - build_frontend:
-          # requires: [deploy_infrastructure]
-          requires: [test_frontend, test_backend, scan_frontend, scan_backend]
-      - build_backend_image:
-          # requires: [deploy_infrastructure]
-          requires: [build_frontend]
-      # - install_kubectl:
+      # - build_backend_image:
+      #     # requires: [deploy_infrastructure]
+      #     requires: [build_frontend]
+      - install_kubectl #:
       #     requires: [build_frontend, build_backend_image]
