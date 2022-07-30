@@ -16,218 +16,218 @@ commands:
             fi
 
 jobs:
-    test_frontend:
-      docker:
-        - image: circleci/node:13.8.0
-      steps:
-        - checkout
-        - run:
-            name: test frontend 
-            command: |
-              cd frontend
-              npm install
-              npm run test
+  test_frontend:
+    docker:
+      - image: circleci/node:13.8.0
+    steps:
+      - checkout
+      - run:
+          name: test frontend 
+          command: |
+            cd frontend
+            npm install
+            npm run test
+
+  test_backend:
+    docker:
+      - image: circleci/node:13.8.0
+    steps:
+      - checkout
+      - run: 
+          name: test backend
+          command: |
+            cd backend
+            npm install
+            npm run test
+
+  scan_frontend:
+    docker:
+      - image: circleci/node:13.8.0
+    steps:
+      - checkout
+      - run:
+          name: scan frontend
+          command: |
+            cd frontend
+            npm install
+            npm audit fix --audit-level=critical --force
+            npm audit --audit-level=critical
+
+  scan_backend:
+    docker:
+      - image: circleci/node:13.8.0
+    steps:
+      - checkout
+      - run:
+          name: scan backend
+          command: |
+            cd backend
+            npm install
+            npm audit fix --audit-level=critical
+            npm audit fix --audit-level=critical --force
+            npm audit --audit-level=critical
+              
+  deploy_infrastructure:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: install Make
+          command: yum install make -y
+      - run:
+          name: deploying the frontend.yml which create s3 bucket
+          command: |
+            make create-bucket
+      - run:
+          name: deploying ecr.yml
+          command: |
+            make create-ecr
+      - revert_migration
+  run_migrations:
+    docker:
+      - image: circleci/node:13.8.0
+    steps:
+      - checkout
+      - run:
+          name: send migration status to kvdb.io
+          command: |
+            export POD_NAME=$(kubectl get pods -o=jsonpath='{.items[0].metadata.name}')
+            k exec pod/$POD_NAME -it -- /bin/bash -c "cat migrations_dump.txt" > migrations_dump.txt
+            if grep -q "has been executed successfully." migrations_dump.txt
+            then
+              curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_$\{CIRCLE_WORKFLOW_ID:0:7\} -d '1'
+              curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_$\{CIRCLE_WORKFLOW_ID:0:7\}
+            else
+                echo migration failed
+            fi
+      - revert_migration
+  build_backend_image:
+    docker:
+      - image: docker:stable-dind
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: install awscli
+          command: |
+            apk add --no-cache aws-cli
+      - run:
+          name: build backend image
+          command: |
+            apk add --no-cache docker-compose
+            docker-compose build --no-cache
+            docker images
+            docker run -it backend bash -c env
+      - run:
+          name: tag image
+          command: |
+            docker images
+            aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 943641428393.dkr.ecr.us-east-2.amazonaws.com             
+            docker tag backend:latest 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:${CIRCLE_WORKFLOW_ID:0:7}
+            docker push 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:${CIRCLE_WORKFLOW_ID:0:7}
   
-    test_backend:
-      docker:
-        - image: circleci/node:13.8.0
-      steps:
-        - checkout
-        - run: 
-            name: test backend
-            command: |
-              cd backend
-              npm install
-              npm run test
+  deployment:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: install dependencies
+          command: |
+            yum install -y tar gzip make
+      - run:
+          name: install kubectl
+          command: |
+            make install-kubectl
+            make update-kubeconfig
+            kubectl get nodes
+      - run:
+          name: apply deployment.yml and expose through nlb
+          command: |
+            sed -e 's/latest/'${CIRCLE_WORKFLOW_ID:0:7}'/g' -i .circleci/files/deployment.yml
+            kubectl apply -f .circleci/files/deployment.yml
+      - run: sleep 180;
+      - run:
+          name: get Backend_URL
+          command: |
+            export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
+            export API_URL="http://${BACKEND_IP}:3030"
+            echo "API_URL = ${API_URL}"
+            echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+            cat frontend/.env
+      - run:
+          name: deploy frontend objects to s3
+          command: |
+            yum install -y tar gzip
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+            . ~/.nvm/nvm.sh
+            nvm install --lts
+            cd frontend
+            npm install
+            npm run build
+            tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+            aws s3 cp dist s3://udapeople-frontend-bucket --recursive
+      - revert_migration
+  smoke-test:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: install dependencies
+          command: |
+            yum install -y tar gzip make
+      - run:
+          name: install kubectl
+          command: |
+            make install-kubectl
+            make update-kubeconfig
+      - run:
+          name: backend smoke test
+          command: |
+            export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
+            export API_URL="http://${BACKEND_IP}:3030"
+            echo "${API_URL}"
+            if curl "${API_URL}/api/status" | grep "ok"
+            then
+              exit 0
+            else
+              exit 1
+            fi
+      - run:
+          name: frontend smoke test
+          command: |
+            URL="http://udapeople-frontend-bucket.s3-website.us-east-2.amazonaws.com/#/employees"
+            echo ${URL} 
+            if curl -s ${URL} | grep "Welcome"
+            then
+              exit 0
+            else
+              exit 1
+            fi
+      - revert_migration
+  cloudfront-update:
+        docker:
+          - image: amazon/aws-cli
+        steps:
+          - checkout
+          - run:
+              name: switch to new s3 bucket
+              command: aws cloudformation deploy --template-file .circleci/files/cloudfront.yml --stack-name InitialStack --parameter-overrides WorkflowID="frontend-bucket" --tags project=udapeople
+  - revert_migration
 
-    scan_frontend:
-      docker:
-        - image: circleci/node:13.8.0
-      steps:
-        - checkout
-        - run:
-            name: scan frontend
-            command: |
-              cd frontend
-              npm install
-              npm audit fix --audit-level=critical --force
-              npm audit --audit-level=critical
-
-    scan_backend:
-      docker:
-        - image: circleci/node:13.8.0
-      steps:
-        - checkout
-        - run:
-            name: scan backend
-            command: |
-              cd backend
-              npm install
-              npm audit fix --audit-level=critical
-              npm audit fix --audit-level=critical --force
-              npm audit --audit-level=critical
-                
-    deploy_infrastructure:
-      docker:
-        - image: amazon/aws-cli
-      steps:
-        - checkout
-        - run:
-            name: install Make
-            command: yum install make -y
-        - run:
-            name: deploying the frontend.yml which create s3 bucket
-            command: |
-              make create-bucket
-        - run:
-            name: deploying ecr.yml
-            command: |
-              make create-ecr
-        - revert_migration
-    run_migrations:
-      docker:
-        - image: circleci/node:13.8.0
-      steps:
-        - checkout
-        - run:
-            name: send migration status to kvdb.io
-            command: |
-              export POD_NAME=$(kubectl get pods -o=jsonpath='{.items[0].metadata.name}')
-              k exec pod/$POD_NAME -it -- /bin/bash -c "cat migrations_dump.txt" > migrations_dump.txt
-              if grep -q "has been executed successfully." migrations_dump.txt
-              then
-                curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_$\{CIRCLE_WORKFLOW_ID:0:7\} -d '1'
-                curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_$\{CIRCLE_WORKFLOW_ID:0:7\}
-              else
-                  echo migration failed
-              fi
-        - revert_migration
-    build_backend_image:
-      docker:
-        - image: docker:stable-dind
-      steps:
-        - checkout
-        - setup_remote_docker
-        - run:
-            name: install awscli
-            command: |
-              apk add --no-cache aws-cli
-        - run:
-            name: build backend image
-            command: |
-              apk add --no-cache docker-compose
-              docker-compose build --no-cache
-              docker images
-              docker run -it backend bash -c env
-        - run:
-            name: tag image
-            command: |
-              docker images
-              aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 943641428393.dkr.ecr.us-east-2.amazonaws.com             
-              docker tag backend:latest 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:${CIRCLE_WORKFLOW_ID:0:7}
-              docker push 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:${CIRCLE_WORKFLOW_ID:0:7}
-    
-    deployment:
-      docker:
-        - image: amazon/aws-cli
-      steps:
-        - checkout
-        - run:
-            name: install dependencies
-            command: |
-              yum install -y tar gzip make
-        - run:
-            name: install kubectl
-            command: |
-              make install-kubectl
-              make update-kubeconfig
-              kubectl get nodes
-        - run:
-            name: apply deployment.yml and expose through nlb
-            command: |
-              sed -e 's/latest/'${CIRCLE_WORKFLOW_ID:0:7}'/g' -i .circleci/files/deployment.yml
-              kubectl apply -f .circleci/files/deployment.yml
-        - run: sleep 180;
-        - run:
-            name: get Backend_URL
-            command: |
-              export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
-              export API_URL="http://${BACKEND_IP}:3030"
-              echo "API_URL = ${API_URL}"
-              echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
-              cat frontend/.env
-        - run:
-            name: deploy frontend objects to s3
-            command: |
-              yum install -y tar gzip
-              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
-              . ~/.nvm/nvm.sh
-              nvm install --lts
-              cd frontend
-              npm install
-              npm run build
-              tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
-              aws s3 cp dist s3://udapeople-frontend-bucket --recursive
-        - revert_migration
-    smoke-test:
-      docker:
-        - image: amazon/aws-cli
-      steps:
-        - checkout
-        - run:
-            name: install dependencies
-            command: |
-              yum install -y tar gzip make
-        - run:
-            name: install kubectl
-            command: |
-              make install-kubectl
-              make update-kubeconfig
-        - run:
-            name: backend smoke test
-            command: |
-              export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
-              export API_URL="http://${BACKEND_IP}:3030"
-              echo "${API_URL}"
-              if curl "${API_URL}/api/status" | grep "ok"
-              then
-                exit 0
-              else
-                exit 1
-              fi
-        - run:
-            name: frontend smoke test
-            command: |
-              URL="http://udapeople-frontend-bucket.s3-website.us-east-2.amazonaws.com/#/employees"
-              echo ${URL} 
-              if curl -s ${URL} | grep "Welcome"
-              then
-                exit 0
-              else
-                exit 1
-              fi
-        - revert_migration
-    cloudfront-update:
-          docker:
-            - image: amazon/aws-cli
-          steps:
-            - checkout
-            - run:
-                name: switch to new s3 bucket
-                command: aws cloudformation deploy --template-file .circleci/files/cloudfront.yml --stack-name InitialStack --parameter-overrides WorkflowID="frontend-bucket" --tags project=udapeople
-    - revert_migration
-
-    lint-frontend:
-      docker:
-        - image: circleci/node:13.8.0
-      steps:
-        - checkout
-        - run: 
-            name: lint frontendcode
-            commannd: |
-              cd frontend
-              npm install
-              npm run lint
+  lint-frontend:
+    docker:
+      - image: circleci/node:13.8.0
+    steps:
+      - checkout
+      - run: 
+          name: lint frontendcode
+          commannd: |
+            cd frontend
+            npm install
+            npm run lint
 
 workflows:
   default:
