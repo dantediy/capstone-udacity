@@ -79,16 +79,18 @@ jobs:
               command: |
                 cd backend
                 npm install
+                echo -----------------------------------
                 npm run migrations > migrations_dump.txt
-          - run:
-              name: send migration status to kvdb.io
-              command: |
-                if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
-                then
-                  curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check -d '1'
-                  curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check
-                fi
-                  echo migration failed
+                cat migrations_dump.txt
+          # - run:
+          #     name: send migration status to kvdb.io
+          #     command: |
+          #       if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
+          #       then
+          #         curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check -d '1'
+          #         curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check
+          #       fi
+          #         echo migration failed
     
     # build_frontend:
     #   docker:
