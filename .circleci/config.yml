@@ -68,32 +68,53 @@ jobs:
             name: deploying ecr.yml
             command: |
               make create-ecr
+
+    run_migrations:
+        docker:
+          - image: circleci/node:13.8.0
+        steps:
+          - checkout
+          - run:
+              name: run migrations
+              command: |
+                cd backend
+                npm install
+                npm run migrations > migrations_dump.txt
+          - run:
+              name: send migration status to kvdb.io
+              command: |
+                if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
+                then
+                  curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check -d '1'
+                  curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check
+                fi
+                  echo migration failed
     
-    build_frontend:
-      docker:
-        - image: amazon/aws-cli
-      steps:
-        - checkout
-        - run:
-            name: get Backend_URL
-            command: |
-              export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
-              export API_URL="http://${BACKEND_IP}:3030"
-              echo "API_URL = ${API_URL}"
-              echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
-              cat frontend/.env
-        - run:
-            name: deploy frontend objects
-            command: |
-              yum install -y tar gzip
-              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
-              . ~/.nvm/nvm.sh
-              nvm install --lts
-              cd frontend
-              npm install
-              npm run build
-              tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
-              aws s3 cp dist s3://udapeople-frontend-bucket --recursive
+    # build_frontend:
+    #   docker:
+    #     - image: amazon/aws-cli
+    #   steps:
+    #     - checkout
+    #     - run:
+    #         name: get Backend_URL
+    #         command: |
+    #           export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
+    #           export API_URL="http://${BACKEND_IP}:3030"
+    #           echo "API_URL = ${API_URL}"
+    #           echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+    #           cat frontend/.env
+    #     - run:
+    #         name: deploy frontend objects
+    #         command: |
+    #           yum install -y tar gzip
+    #           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+    #           . ~/.nvm/nvm.sh
+    #           nvm install --lts
+    #           cd frontend
+    #           npm install
+    #           npm run build
+    #           tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+    #           aws s3 cp dist s3://udapeople-frontend-bucket --recursive
 
     build_backend_image:
       docker:
@@ -160,27 +181,16 @@ jobs:
               npm run build
               tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
               aws s3 cp dist s3://udapeople-frontend-bucket --recursive
-    check:
+
+    cloudfront-update:
       docker:
         - image: amazon/aws-cli
       steps:
         - checkout
         - run:
-            name: install dependencies
-            command: |
-              yum install -y tar gzip make
-        - run:
-            name: install kubectl
-            command: |
-              make install-kubectl
-              make update-kubeconfig
-        - run:
-            name: check backend ip
-            command: |
-              export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
-              export API_URL="http://${BACKEND_IP}:3030"
-              echo "API_URL = ${API_URL}"
-
+            name: switch to new s3 bucket
+            command: aws cloudformation deploy --template-file .circleci/files/cloudfront.yml --stack-name InitialStack --parameter-overrides WorkflowID="frontend-bucket" --tags project=udapeople
+      
 workflows:
   default:
     jobs:
@@ -195,6 +205,6 @@ workflows:
       # #         only: [main]
       # - build_backend_image:
       #     # requires: [deploy_infrastructure]
-      - deployment #:
+      # - deployment #:
           # requires: [build_backend_image]
-      # - check
+      - run_migrations
