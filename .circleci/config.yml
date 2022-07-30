@@ -139,7 +139,7 @@ jobs:
             name: run pod
             command: |
               kubectl run project --image=943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
-          
+              kubectl get pod
 workflows:
   default:
     jobs:
