@@ -68,56 +68,55 @@ jobs:
             name: deploying ecr.yml
             command: |
               make create-ecr
-
     run_migrations:
-        docker:
-          - image: circleci/node:13.8.0
-        steps:
-          - checkout
-          - run:
-              name: run migrations
-              command: |
-                cd backend
-                npm install
-                echo -----------------------------------
-                npm run migrations > migrations_dump.txt
-                cat migrations_dump.txt
-          # - run:
-          #     name: send migration status to kvdb.io
-          #     command: |
-          #       if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
-          #       then
-          #         curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check -d '1'
-          #         curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check
-          #       fi
-          #         echo migration failed
-    
-    # build_frontend:
-    #   docker:
-    #     - image: amazon/aws-cli
-    #   steps:
-    #     - checkout
-    #     - run:
-    #         name: get Backend_URL
-    #         command: |
-    #           export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
-    #           export API_URL="http://${BACKEND_IP}:3030"
-    #           echo "API_URL = ${API_URL}"
-    #           echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
-    #           cat frontend/.env
-    #     - run:
-    #         name: deploy frontend objects
-    #         command: |
-    #           yum install -y tar gzip
-    #           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
-    #           . ~/.nvm/nvm.sh
-    #           nvm install --lts
-    #           cd frontend
-    #           npm install
-    #           npm run build
-    #           tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
-    #           aws s3 cp dist s3://udapeople-frontend-bucket --recursive
+      docker:
+        - image: circleci/node:13.8.0
+      steps:
+        - checkout
+        - run:
+            name: run migrations
+            command: |
+              cd backend
+              npm install
+              npm run migrations > migrations_dump.txt
+              cat migrations_dump.txt
+        - run:
+            name: send migration status to kvdb.io
+            command: |
+              if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
+              then
+                curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check -d '1'
+                curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check
+              else
+                echo migration failed
+              fi
 
+    # run_migrations:
+    #     docker:
+    #       - image: circleci/node:13.8.0
+    #     steps:
+    #       - checkout
+    #       - run:
+    #           name: run migrations
+    #           command: |
+    #             cd backend
+    #             npm install
+    #             echo -----------------------------------
+    #             npm run migrations > migrations_dump.txt
+    #             cat migrations_dump.txt
+    #       - run:
+    #           name: send migration status to kvdb.io
+    #           command: |
+    #             export POD_NAME=$(kubectl get pods -o=jsonpath='{.items[0].metadata.name}')
+    #             k exec pod/$pod_name -it -- /bin/bash -c "cat migrations_dump.txt"
+    #             if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
+    #             then
+    #               curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check -d '1'
+    #               curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check
+    #             else
+    #                 echo migration failed
+    #             fi
+    
     build_backend_image:
       docker:
         - image: docker:stable-dind
@@ -207,6 +206,9 @@ workflows:
       # #         only: [main]
       # - build_backend_image:
       #     # requires: [deploy_infrastructure]
-      # - deployment #:
+      - deployment #:
           # requires: [build_backend_image]
-      - run_migrations
+      - cloudfront-update:
+          requires: [deployment]
+      - run_migrations:
+          requires: [cloudfront-update]
