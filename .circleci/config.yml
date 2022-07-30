@@ -215,14 +215,24 @@ jobs:
           - run:
               name: switch to new s3 bucket
               command: aws cloudformation deploy --template-file .circleci/files/cloudfront.yml --stack-name InitialStack --parameter-overrides WorkflowID="frontend-bucket" --tags project=udapeople
-
+  lint-backend:
+    docker:
+      - image: circleci/node:13.8.0
+    steps:
+      - checkout
+      - run:
+          name: Running lint on backend code
+          command: |
+            cd backend
+            npm install
+            npm run lint
   lint-frontend:
     docker:
       - image: circleci/node:13.8.0
     steps:
       - checkout
       - run: 
-          name: lint frontendcode
+          name: lint frontend code
           command: |
             cd frontend
             npm install
@@ -248,4 +258,5 @@ workflows:
       #     requires: [deployment]
       # - cloudfront-update:
       #     requires: [smoke-test]
-      - lint-frontend
+      - lint-backend
+      #- lint-frontend
