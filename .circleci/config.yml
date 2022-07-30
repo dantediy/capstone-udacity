@@ -175,6 +175,7 @@ jobs:
       docker:
         - image: amazon/aws-cli
       steps:
+        - checkout
         - run:
             name: install dependencies
             command: |
@@ -216,7 +217,7 @@ jobs:
         - run: 
             name: test sed command
             command: |
-              sed -e 's/latest/${CIRCLE_WORKFLOW_ID:0:7}/g' -i .circleci/files/deployment.yml
+              sed -e 's/latest/'${CIRCLE_WORKFLOW_ID:0:7}'/g' -i .circleci/files/deployment.yml
               cat .circleci/files/deployment.yml
 
 workflows:
