@@ -25,3 +25,6 @@ install-kubectl:
 
 create-deployment:
 	kubectl apply -f .circleci/files/deployment.yml
+
+lint:
+	hadolint --ignore DL3013 Dockerfile.backend
