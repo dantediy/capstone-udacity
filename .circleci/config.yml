@@ -206,9 +206,9 @@ workflows:
       # #         only: [main]
       # - build_backend_image:
       #     # requires: [deploy_infrastructure]
-      - deployment #:
+      # - deployment #:
           # requires: [build_backend_image]
-      - cloudfront-update:
-          requires: [deployment]
-      - run_migrations:
-          requires: [cloudfront-update]
+      - cloudfront-update #:
+          # requires: [deployment]
+      # - run_migrations:
+      #     requires: [cloudfront-update]
