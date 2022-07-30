@@ -1,19 +1,19 @@
 version: 2.1
 
-commands:
-  revert_migration:
-    steps:
-      - run:
-          name: revert migrations
-          when: on_fail
-          command: |
-            SUCCESS=$(curl --insecure  https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_$\{CIRCLE_WORKFLOW_ID:0:7\})
-            if (( $SUCCESS == '1' ));
-            then
-              cd ~/project/backend
-              npm install
-              npm run migration:revert
-            fi
+# commands:
+#   revert_migration:
+#     steps:
+#       - run:
+#           name: revert migrations
+#           when: on_fail
+#           command: |
+#             SUCCESS=$(curl --insecure  https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_$\{CIRCLE_WORKFLOW_ID:0:7\})
+#             if (( $SUCCESS == '1' ));
+#             then
+#               cd ~/project/backend
+#               npm install
+#               npm run migration:revert
+#             fi
 
 jobs:
   test_frontend:
@@ -83,7 +83,7 @@ jobs:
           name: deploying ecr.yml
           command: |
             make create-ecr
-      - revert_migration
+
   run_migrations:
     docker:
       - image: circleci/node:13.8.0
@@ -101,7 +101,7 @@ jobs:
             else
                 echo migration failed
             fi
-      - revert_migration
+
   build_backend_image:
     docker:
       - image: docker:stable-dind
@@ -168,7 +168,7 @@ jobs:
             npm run build
             tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
             aws s3 cp dist s3://udapeople-frontend-bucket --recursive
-      - revert_migration
+
   smoke-test:
     docker:
       - image: amazon/aws-cli
@@ -206,7 +206,7 @@ jobs:
             else
               exit 1
             fi
-      - revert_migration
+
   cloudfront-update:
         docker:
           - image: amazon/aws-cli
@@ -215,7 +215,6 @@ jobs:
           - run:
               name: switch to new s3 bucket
               command: aws cloudformation deploy --template-file .circleci/files/cloudfront.yml --stack-name InitialStack --parameter-overrides WorkflowID="frontend-bucket" --tags project=udapeople
-  - revert_migration
 
   lint-frontend:
     docker:
