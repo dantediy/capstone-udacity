@@ -159,6 +159,24 @@ jobs:
               npm run build
               tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
               aws s3 cp dist s3://udapeople-frontend-bucket --recursive
+    check:
+      docker:
+        - image: amazon/aws-cli
+        - run:
+            name: install dependencies
+            command: |
+              yum install -y tar gzip make
+        - run:
+            name: install kubectl
+            command: |
+              make install-kubectl
+              make update-kubeconfig
+        - run:
+            name: check backend ip
+            command: |
+              export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
+              export API_URL="http://${BACKEND_IP}:3030"
+              echo "API_URL = ${API_URL}"
 
 workflows:
   default:
@@ -174,5 +192,6 @@ workflows:
       # #         only: [main]
       # - build_backend_image:
       #     # requires: [deploy_infrastructure]
-      - deployment #:
+#      - deployment #:
           # requires: [build_backend_image]
+      - check
