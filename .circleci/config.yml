@@ -68,28 +68,6 @@ jobs:
             name: deploying ecr.yml
             command: |
               make create-ecr
-    run_migrations:
-      docker:
-        - image: circleci/node:13.8.0
-      steps:
-        - checkout
-        - run:
-            name: run migrations
-            command: |
-              cd backend
-              npm install
-              npm run migrations > migrations_dump.txt
-              cat migrations_dump.txt
-        - run:
-            name: send migration status to kvdb.io
-            command: |
-              if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
-              then
-                curl https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check -d '1'
-                curl --insecure https://kvdb.io/AxvBHCFVASVLnbCfKkfeqz/migration_check
-              else
-                echo migration failed
-              fi
 
     # run_migrations:
     #     docker:
@@ -139,8 +117,8 @@ jobs:
             command: |
               docker images
               aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 943641428393.dkr.ecr.us-east-2.amazonaws.com             
-              docker tag backend:latest 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
-              docker push 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
+              docker tag backend:latest 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:${CIRCLE_WORKFLOW_ID:0:7}
+              docker push 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:${CIRCLE_WORKFLOW_ID:0:7}
     
     deployment:
       docker:
@@ -160,6 +138,7 @@ jobs:
         - run:
             name: apply deployment.yml and expose through nlb
             command: |
+
               kubectl apply -f .circleci/files/deployment.yml
         - run: sleep 180;
         - run:
@@ -191,7 +170,44 @@ jobs:
         - run:
             name: switch to new s3 bucket
             command: aws cloudformation deploy --template-file .circleci/files/cloudfront.yml --stack-name InitialStack --parameter-overrides WorkflowID="frontend-bucket" --tags project=udapeople
-      
+    
+    smoke_test:
+      docker:
+        - image: amazon/aws-cli
+      steps:
+        - run:
+            name: backend smoke test
+            command: |
+              export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
+              export API_URL="http://${BACKEND_IP}:3030"
+              echo "${API_URL}"
+              if curl "${API_URL}/api/status" | grep "ok"
+              then
+                exit 0
+              else
+                exit 1
+              fi
+        - run:
+          name: frontend smoke test
+          command: |
+            URL="http://udapeople-frontend-bucket.s3-website.us-east-2.amazonaws.com/#/employees"
+            echo ${URL} 
+            if curl -s ${URL} | grep "Welcome"
+            then
+              exit 0
+            else
+              exit 1
+            fi
+    test:
+      docker:
+        - image: amazon/aws-cli
+      steps:
+        - checkout
+        - run: 
+            name: test sed
+            command: |
+              sed -e 's/latest/${CIRCLE_WORKFLOW_ID:0:7}/g' -i .circleci/files/deployment.yml
+              cat circleci/files/deployment.yml
 workflows:
   default:
     jobs:
@@ -208,7 +224,8 @@ workflows:
       #     # requires: [deploy_infrastructure]
       # - deployment #:
           # requires: [build_backend_image]
-      - cloudfront-update #:
+      # - cloudfront-update #:
           # requires: [deployment]
       # - run_migrations:
       #     requires: [cloudfront-update]
+      - test
