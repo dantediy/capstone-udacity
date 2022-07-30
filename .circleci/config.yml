@@ -139,6 +139,7 @@ jobs:
             name: apply deployment.yml and expose through nlb
             command: |
               kubectl apply -f .circleci/files/deployment.yml
+        - run: sleep 180;
         - run:
             name: get Backend_URL
             command: |
@@ -194,6 +195,6 @@ workflows:
       # #         only: [main]
       # - build_backend_image:
       #     # requires: [deploy_infrastructure]
-#      - deployment #:
+      - deployment #:
           # requires: [build_backend_image]
-      - check
+      # - check
