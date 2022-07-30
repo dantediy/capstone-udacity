@@ -162,6 +162,7 @@ jobs:
     check:
       docker:
         - image: amazon/aws-cli
+      steps:
         - run:
             name: install dependencies
             command: |
