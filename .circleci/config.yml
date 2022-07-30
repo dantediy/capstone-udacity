@@ -223,7 +223,7 @@ jobs:
       - checkout
       - run: 
           name: lint frontendcode
-          commannd: |
+          command: |
             cd frontend
             npm install
             npm run lint
