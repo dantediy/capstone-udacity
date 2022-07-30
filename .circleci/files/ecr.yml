@@ -1,0 +1,40 @@
+Parameters:
+  Name:
+    Description: ECR Name
+    Type: String
+    Default: "my-ecr-capstone"
+    
+  AccountID:
+    Description: AWS Account ID
+    Type: String
+    Default: "943641428393" 
+    
+Resources:
+  MyECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Name}
+      ImageScanningConfiguration: 
+        ScanOnPush: true
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowPushPull
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub "arn:aws:iam::${AccountID}:root"
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:PutImage"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:UploadLayerPart"
+              - "ecr:CompleteLayerUpload"
+Outputs:
+  RepoURI:
+    Value: !GetAtt MyECR.RepositoryUri
+    Description: URI for ECR
+    Export:
+      Name: !Sub "${Name}-uri"

@@ -1,0 +1,162 @@
+version: 2.1
+
+jobs:
+    test_frontend:
+      docker:
+        - image: circleci/node:13.8.0
+      steps:
+        - checkout
+        - run:
+            name: test frontend 
+            command: |
+              cd frontend
+              npm install
+              npm run test
+  
+    test_backend:
+      docker:
+        - image: circleci/node:13.8.0
+      steps:
+        - checkout
+        - run: 
+            name: test backend
+            command: |
+              cd backend
+              npm install
+              npm run test
+
+    scan_frontend:
+      docker:
+        - image: circleci/node:13.8.0
+      steps:
+        - checkout
+        - run:
+            name: scan frontend
+            command: |
+              cd frontend
+              npm install
+              npm audit fix --audit-level=critical --force
+              npm audit --audit-level=critical
+
+    scan_backend:
+      docker:
+        - image: circleci/node:13.8.0
+      steps:
+        - checkout
+        - run:
+            name: scan backend
+            command: |
+              cd backend
+              npm install
+              npm audit fix --audit-level=critical
+              npm audit fix --audit-level=critical --force
+              npm audit --audit-level=critical
+                
+    deploy_infrastructure:
+      docker:
+        - image: amazon/aws-cli
+      steps:
+        - checkout
+        - run:
+            name: install Make
+            command: yum install make -y
+        - run:
+            name: deploying the frontend.yml which create s3 bucket
+            command: |
+              make create-bucket
+        - run:
+            name: deploying ecr.yml
+            command: |
+              make create-ecr
+    
+    build_frontend:
+      docker:
+        - image: amazon/aws-cli
+      steps:
+        - checkout
+        - run:
+            name: get Backend_URL
+            command: |
+              export BACKEND_IP=$(aws ec2 describe-instances --query 'Reservations[*].Instances[*].PublicIpAddress' --filters "Name=tag:project,Values=udapeople" --output text)
+              export API_URL="http://${BACKEND_IP}:3030"
+              echo "API_URL = ${API_URL}"
+              echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+              cat frontend/.env
+        - run:
+            name: deploy frontend objects
+            command: |
+              yum install -y tar gzip
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+              . ~/.nvm/nvm.sh
+              nvm install --lts
+              cd frontend
+              npm install
+              npm run build
+              tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+              aws s3 cp dist s3://udapeople-frontend-bucket --recursive
+
+    build_backend_image:
+      docker:
+        - image: docker:stable-dind
+      steps:
+        - checkout
+        - setup_remote_docker
+        - run:
+            name: install awscli
+            command: |
+              apk add --no-cache aws-cli
+        - run:
+            name: build backend image
+            command: |
+              apk add --no-cache docker-compose
+              docker-compose build --no-cache
+              docker images
+              docker run -it backend bash -c env
+        - run:
+            name: tag image
+            command: |
+              docker images
+              aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 943641428393.dkr.ecr.us-east-2.amazonaws.com             
+              docker tag backend:latest 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
+              docker push 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
+    
+    install_kubectl:
+      docker:
+        - image: amazon/aws-cli
+      steps:
+        - checkout
+        - run:
+            name: install dependencies
+            command: |
+              yum install -y tar gzip make
+        - run:
+            name: install kubectl
+            command: |
+              make install-kubectl
+              make update-kubeconfig
+              kubectl get nodes
+        - run:
+            name: run pod
+            command: |
+              kubectl run project --image=943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
+          
+workflows:
+  default:
+    jobs:
+      - test_frontend
+      - test_backend
+      - scan_frontend
+      - scan_backend
+      # - deploy_infrastructure:
+      #     requires: [test_frontend, test_backend, scan_frontend, scan_backend]
+      #     filters:
+      #       branches:
+      #         only: [main]
+      - build_frontend:
+          # requires: [deploy_infrastructure]
+          requires: [test_frontend, test_backend, scan_frontend, scan_backend]
+      - build_backend_image:
+          # requires: [deploy_infrastructure]
+          requires: [build_frontend]
+      # - install_kubectl:
+      #     requires: [build_frontend, build_backend_image]
