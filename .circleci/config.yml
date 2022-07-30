@@ -241,10 +241,10 @@ jobs:
 workflows:
   default:
     jobs:
-      # - test_frontend
-      # - test_backend
-      # - scan_frontend
-      # - scan_backend
+      - test_frontend
+      - test_backend
+      - scan_frontend
+      - scan_backend
       # - deploy_infrastructure:
       #     requires: [test_frontend, test_backend, scan_frontend, scan_backend]
       #     filters:
@@ -258,5 +258,8 @@ workflows:
       #     requires: [deployment]
       # - cloudfront-update:
       #     requires: [smoke-test]
-      - lint-backend
-      #- lint-frontend
+      - lint-frontend:
+          requires: [scan_frontend]
+      - lint-backend:
+          requires: [scan_backend]
+      
