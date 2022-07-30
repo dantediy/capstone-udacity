@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: "2022-07-29T07:33:47Z"
+  labels:
+    app: udapeople
+  name: udapeople
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: udapeople
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: udapeople
+    spec:
+      containers:
+      - image: 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
+        imagePullPolicy: "Always"
+        name: my-ecr-capstone
+        resources: {}
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+  labels:
+    app: udapeople
+  name: udapeople
+spec:
+  ports:
+  - port: 3030
+    protocol: TCP
+    targetPort: 3030
+  selector:
+    app: udapeople
+  type: LoadBalancer
+status:
+  loadBalancer: {}

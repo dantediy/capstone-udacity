@@ -22,3 +22,6 @@ install-kubectl:
 	echo "8a45348bdaf81d46caf1706c8bf95b3f431150554f47d444ffde89e8cdd712c1  kubectl" | sha256sum --check
 	install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 	chmod +x /usr/local/bin/kubectl
+
+create-deployment:
+	kubectl apply -f .circleci/files/deployment.yml
