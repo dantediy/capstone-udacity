@@ -138,7 +138,7 @@ jobs:
         - run:
             name: apply deployment.yml and expose through nlb
             command: |
-              kubectl apply .circleci/files/deployment.yml
+              kubectl apply -f .circleci/files/deployment.yml
 
 workflows:
   default:
