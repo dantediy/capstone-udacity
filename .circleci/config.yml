@@ -120,7 +120,7 @@ jobs:
               docker tag backend:latest 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
               docker push 943641428393.dkr.ecr.us-east-2.amazonaws.com/my-ecr-capstone:latest
     
-    install_kubectl:
+    deployment:
       docker:
         - image: amazon/aws-cli
       steps:
@@ -139,6 +139,26 @@ jobs:
             name: apply deployment.yml and expose through nlb
             command: |
               kubectl apply -f .circleci/files/deployment.yml
+        - run:
+            name: get Backend_URL
+            command: |
+              export BACKEND_IP=$(kubectl get service -o=jsonpath='{.items[?(@.metadata.name=="udapeople")].status.loadBalancer.ingress[0].hostname}')
+              export API_URL="http://${BACKEND_IP}:3030"
+              echo "API_URL = ${API_URL}"
+              echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+              cat frontend/.env
+        - run:
+            name: deploy frontend objects to s3
+            command: |
+              yum install -y tar gzip
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+              . ~/.nvm/nvm.sh
+              nvm install --lts
+              cd frontend
+              npm install
+              npm run build
+              tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+              aws s3 cp dist s3://udapeople-frontend-bucket --recursive
 
 workflows:
   default:
@@ -154,7 +174,5 @@ workflows:
       # #         only: [main]
       # - build_backend_image:
       #     # requires: [deploy_infrastructure]
-      - install_kubectl #:
+      - deployment #:
           # requires: [build_backend_image]
-      - build_frontend:
-          requires: [install_kubectl] #, build_backend_image]
