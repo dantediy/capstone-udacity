@@ -52,7 +52,6 @@ jobs:
             npm install
             npm audit fix --audit-level=critical --force
             npm audit --audit-level=critical
-            npm run lint
 
   scan_backend:
     docker:
@@ -246,21 +245,21 @@ workflows:
       - test_backend
       - scan_frontend
       - scan_backend
-      # - deploy_infrastructure:
-      #     requires: [test_frontend, test_backend, scan_frontend, scan_backend]
-      #     filters:
-      #       branches:
-      #         only: [main]
-      # - build_backend_image:
-      #     requires: [deploy_infrastructure]
-      # - deployment:
-      #     requires: [build_backend_image]
-      # - smoke-test:
-      #     requires: [deployment]
-      # - cloudfront-update:
-      #     requires: [smoke-test]
-      # - lint-frontend:
-      #     requires: [scan_frontend]
-      # - lint-backend:
-      #     requires: [scan_backend]
+      - lint-frontend:
+          requires: [test_frontend, scan_frontend]
+      - lint-backend:
+          requires: [test_backend, scan_backend]
+      - deploy_infrastructure:
+          requires: [test_frontend, test_backend, scan_frontend, scan_backend, lint-frontend, lint-backend]
+          filters:
+            branches:
+              only: [main]
+      - build_backend_image:
+          requires: [deploy_infrastructure]
+      - deployment:
+          requires: [build_backend_image]
+      - smoke-test:
+          requires: [deployment]
+      - cloudfront-update:
+          requires: [smoke-test]
       
