@@ -1,0 +1,4 @@
+Github: https://github.com/dantediy/capstone-udacity
+Frontend: http://udapeople-frontend-bucket.s3-website.us-east-2.amazonaws.com
+Cloudfront: http://d3mo85344aqf6t.cloudfront.net		
+Backend: a9a9d06b683804f5a99c267d2c846799-36c27344badfe4cb.elb.us-east-2.amazonaws.com:3030/api/status
